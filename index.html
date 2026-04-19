@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drone LUT Photo Editor</title>
+<script src="config.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+
+<style>
+/* ═════════ PENGATURAN DASAR & TEMA ═════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeede9;
+  --text: #1a1a18; --text2: #6b6b66; --text3: #9c9a92;
+  --border: rgba(0,0,0,0.10); --border2: rgba(0,0,0,0.18);
+  --radius: 10px; --radius-sm: 6px; --accent: #1a1a18;
+}
+
+/* Mode Gelap Otomatis Mengikuti Sistem */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+    --text: #e8e6de; --text2: #9c9a92; --text3: #6b6b66;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+    --accent: #e8e6de;
+  }
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ═════════ HEADER & TOMBOL PORTOFOLIO ═════════ */
+header { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+
+/* Wrapper untuk Logo & Tombol Portofolio (Kiri) */
+.header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+.logo span { color: var(--text2); font-weight: 400; }
+
+.btn-portfolio { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--accent); background: var(--bg); color: var(--text); cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px; }
+.btn-portfolio:hover { background: var(--accent); color: var(--bg); }
+
+/* Tombol Panduan (Kanan) */
+.btn-guide { font-size: 11px; padding: 6px 12px; border-radius: 4px; border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text); cursor: pointer; }
+.btn-guide:hover { background: var(--bg); }
+
+@media (min-width: 769px) {
+  #btn-show-port { display: none; }
+}
+
+/* Modal (Pop-up) Umum */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+.modal-content { background: var(--bg); padding: 24px; border-radius: var(--radius); max-width: 550px; width: 90%; max-height: 85vh; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.close-modal { cursor: pointer; color: var(--text3); font-size: 24px; line-height: 1; transition: 0.2s; }
+.close-modal:hover { color: var(--text); }
+.modal-desc { font-size: 12px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+
+/* Teks Panduan */
+.modal-body p, .modal-body ul { font-size: 12px; color: var(--text2); line-height: 1.6; }
+.modal-body h4 { color: var(--text); margin: 12px 0 4px; font-size: 13px; }
+.modal-body ul { margin-left: 20px; margin-bottom: 12px; }
+
+/* Item Portofolio */
+.port-category { margin-bottom: 16px; }
+.port-cat-title { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.port-item { background: var(--bg2); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 8px; border: 1px solid var(--border2); }
+.port-item h4 { font-size: 13px; margin: 0 0 4px 0; color: var(--text); }
+.port-item p { font-size: 11px; margin: 0; color: var(--text2); line-height: 1.5; }
+.port-badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.badge-social { font-size: 10px; font-weight: 500; text-decoration: none; color: var(--bg); background: var(--text2); padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; opacity: 0.8; }
+.badge-social:hover { opacity: 1; transform: translateY(-1px); filter: brightness(1.2); }
+.badge-social svg { width: 8px; height: 8px; fill: currentColor; }
+
+/* ═════════ LAYOUT UTAMA APLIKASI ═════════ */
+.main { flex: 1; display: grid; grid-template-columns: 300px 1fr 320px; width: 100%; overflow: hidden; }
+
+/* Sidebar Kiri (Portofolio/Jasa - Desktop Only) */
+.sidebar-left { background: var(--bg); border-right: 0.5px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; height: 100%; }
+.sidebar-left .panel-header { 
+  cursor: default; 
+  background: var(--bg2); 
+  padding: 18px 14px; 
+  border-bottom: 2px solid var(--border2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.sidebar-left .panel-header span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: #FFD700; /* Gold color for high value */
+  text-transform: uppercase;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-left .panel-header .tagline {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text3);
+  text-transform: none;
+}
+.sidebar-left .port-category { padding: 12px 14px; border-bottom: 0.5px solid var(--border); }
+.sidebar-left .port-cat-title { margin-bottom: 12px; }
+.sidebar-left .port-item { background: var(--bg2); border: 1px solid var(--border2); margin-bottom: 12px; }
+.sidebar-left .social-wrap { margin-top: auto; border-top: 0.5px solid var(--border); padding: 16px 14px; }
+
+/* Kolom Kiri (Area Foto) */
+.left-column { display: flex; flex-direction: column; background: var(--bg2); height: 100%; overflow: hidden; position: relative; }
+.preview-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; overflow: hidden; position: relative; }
+.drop-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); width: 100%; max-width: 500px; height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer; transition: border-color 0.2s; background: var(--bg); padding: 20px; text-align: center; }
+.drop-zone:hover { border-color: var(--text3); }
+.drop-icon { font-size: 40px; opacity: 0.25; }
+.drop-label { font-size: 14px; color: var(--text2); }
+.btn-choose { background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 9px 22px; font-size: 13px; cursor: pointer; color: var(--text); margin-top: 4px; transition: 0.2s; }
+.btn-choose:hover { background: var(--bg2); }
+
+/* Canvas (Foto Utama) */
+#preview-canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: none; border-radius: 6px; transform-origin: 0 0; cursor: grab; touch-action: none; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+#preview-canvas:active { cursor: grabbing; }
+#hidden-canvas { display: none; }
+
+/* Action Bar (Bawah Foto) */
+.action-bar { padding: 12px 24px; background: var(--bg); border-top: 0.5px solid var(--border); display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; flex-shrink: 0; }
+.btn { border-radius: var(--radius-sm); padding: 8px 16px; font-size: 12px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border2); background: var(--bg); color: var(--text2); display: flex; align-items: center; gap: 6px; }
+.btn:hover { color: var(--text); border-color: var(--text3); }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 500; }
+.btn.primary:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+.btn-hold:active, .btn-hold.active-hold { background: var(--text2); color: var(--bg); border-color: var(--text2); }
+
+/* ═════════ SIDEBAR KANAN (PANEL PENGATURAN) ═════════ */
+.sidebar { background: var(--bg); border-left: 0.5px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; height: 100%; overflow-x: hidden; }
+.panel { border-bottom: 0.5px solid var(--border); }
+.panel-header { padding: 12px 14px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--text3); text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; background: var(--bg); position: sticky; top: 0; z-index: 5; }
+.panel-header:hover { color: var(--text2); background: var(--bg2); }
+.panel-content { display: block; overflow: hidden; }
+.panel-content.hidden { display: none; }
+
+/* Tombol Upload LUT Custom */
+.panel-header-btn { font-size: 10px; color: var(--text3); cursor: pointer; background: none; border: 1px solid var(--border2); border-radius: 4px; padding: 3px 7px; text-transform: none; font-weight: 400; transition: 0.2s; }
+.panel-header-btn:hover { color: var(--text); border-color: var(--text2); }
+
+/* Teks Interaktif LUT */
+.lut-hint { font-size: 9px; color: #FF9500; font-weight: 500; padding: 4px 14px; text-align: right; background: var(--bg2); animation: pulse 2s infinite; letter-spacing: 0.2px; }
+@keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+
+/* LUT Cards (Preset) */
+.lut-folder { border-bottom: 0.5px solid var(--border); }
+.folder-header { display: flex; align-items: center; gap: 8px; padding: 9px 14px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text2); transition: 0.15s; }
+.folder-header:hover { background: var(--bg2); }
+.folder-icon { font-size: 13px; opacity: 0.6; transition: transform 0.2s; }
+.folder-icon.open { transform: rotate(90deg); }
+.folder-name { flex: 1; }
+.folder-count { font-size: 10px; opacity: 0.5; font-weight: 400; }
+.folder-luts { display: none; padding: 4px 10px 8px; }
+.folder-luts.open { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+.lut-card { border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; background: var(--bg2); transition: 0.15s; }
+.lut-card:hover { border-color: var(--border2); }
+.lut-card.active { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+.lut-card canvas { width: 100%; display: block; object-fit: cover; }
+.lut-card .lut-name { font-size: 10px; color: var(--text2); padding: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lut-card.active .lut-name { color: var(--text); font-weight: 600; }
+
+/* ═════════ KOMPONEN SLIDERS ═════════ */
+.slider-group { padding: 8px 14px 16px; }
+.slider-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.slider-label { font-size: 11px; font-weight: 500; color: var(--text2); }
+.slider-reset { cursor: pointer; color: var(--text3); display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; transition: 0.2s; }
+.slider-reset svg { width: 12px; height: 12px; fill: currentColor; }
+.slider-reset:hover { color: var(--text); background: var(--bg2); }
+
+/* SAFE BOX SLIDER: Mencegah slider meluap/terpotong */
+.slider-safe-box { 
+  flex: 1; 
+  position: relative; 
+  padding: 8px 12px; 
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+}
+.slider-row { display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; }
+.btn-step { width: 24px; height: 24px; flex-shrink: 0; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.btn-step:active { transform: scale(0.9); }
+
+input[type=range] { 
+  -webkit-appearance: none;
+  width: 100%; 
+  height: 12px; 
+  border-radius: 2px; 
+  background: #ffffff; 
+  cursor: pointer; 
+  touch-action: pan-y !important; 
+  outline: none;
+  border: none;
+  appearance: none;
+  background-size: 100% 4px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #AF52DE;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  margin-top: 0;
+}
+input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #AF52DE;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  border: none;
+}
+.slider-safe-box { 
+  flex: 1; 
+  position: relative; 
+  padding: 12px; 
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+.num-input { width: 48px; font-size: 11px; text-align: center; border: 1px solid var(--border2); border-radius: 4px; background: var(--bg); color: var(--text); padding: 4px; cursor: ns-resize; }
+.num-input:focus { border-color: var(--accent); cursor: text; }
+
+/* ═════════ COLOR MIX (HSL) ═════════ */
+.hsl-header-tools { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+.hsl-dots-wrap { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.hsl-dot { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; box-shadow: inset 0 0 0 1.5px var(--bg); transition: 0.2s; }
+.hsl-dot.active { border-color: var(--text); transform: scale(1.15); box-shadow: 0 0 10px rgba(255,255,255,0.1); }
+.hsl-title { font-size: 11px; color: var(--text2); font-weight: 500; margin-bottom: 12px; text-align: center; }
+
+/* Reset Link & Button */
+.reset-link { 
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bg2);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: auto;
+  margin: 8px auto 0;
+  font-family: inherit;
+}
+.reset-link:hover { background: var(--border); color: var(--text); }
+.reset-link:active { transform: scale(0.98); }
+.reset-link svg { width: 12px; height: 12px; fill: currentColor; }
+
+.btn-picker { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg2); cursor: pointer; color: var(--text2); transition: 0.2s; }
+.btn-picker.active { background: var(--text); color: var(--bg); border-color: var(--text); box-shadow: 0 0 8px rgba(0,0,0,0.2); }
+.btn-picker svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* ═════════ MEDIA SOSIAL ═════════ */
+.social-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 14px 16px; }
+.social-item { display: flex; align-items: center; gap: 6px; text-decoration: none; color: var(--text2); font-size: 11px; padding: 8px; border-radius: 6px; background: var(--bg2); border: 1px solid var(--border2); transition: 0.2s; overflow: hidden; cursor: pointer; }
+.social-item:hover { background: var(--bg); color: var(--text); border-color: var(--text3); }
+.social-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.social-icon { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.social-icon svg { width: 100%; height: 100%; fill: currentColor; }
+
+/* ═════════ RESPONSIVE MOBILE LAYOUT ═════════ */
+@media (max-width: 768px) {
+  body { height: auto; overflow: auto; }
+  .main { display: flex; flex-direction: column; margin: 0; border-radius: 0; border: none; box-shadow: none; height: auto; }
+  .sidebar-left { display: none; }
+  
+  /* REVISI 11: Gambar tetap terlihat (Sticky) dalam safe box saat scroll HP */
+  .left-column { height: 50vh; min-height: 350px; position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+  .preview-area { padding: 12px; }
+  .drop-zone { height: 100%; }
+  .action-bar { padding: 8px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; justify-content: flex-start; }
+  .action-bar .btn { white-space: nowrap; flex-shrink: 0; }
+  .sidebar { height: auto; border-left: none; overflow: visible; }
+  
+  .header-left { gap: 8px; }
+}
+footer { text-align: center; padding: 14px; font-size: 11px; color: var(--text3); line-height: 1.6; }
+</style>
+
+<script src="config.js"></script>
+
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+      <div class="logo"><span id="app-title-display">Drone LUT</span> <span id="app-author-display"></span></div>
+      <button class="btn-portfolio" onclick="togglePortfolio(true)" id="btn-show-port">💼 Jasa & Layanan Kreatif</button>
+  </div>
+  
+  <div>
+      <button class="btn-guide" onclick="toggleModal(true)">■ Panduan</button>
+  </div>
+</header>
+
+<div class="modal-overlay" id="guide-modal" onclick="toggleModal(false)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-title" id="guide-modal-title">Panduan Editor <span class="close-modal" onclick="toggleModal(false)">&times;</span></div>
+        <div class="modal-body" id="guide-modal-body">
+            <p>Aplikasi ini dirancang untuk mengedit foto secara profesional langsung di browser Anda.</p>
+            <h4>📸 Memulai & Melihat Detail</h4>
+            <ul>
+                <li><b>Input:</b> Klik "Pilih File Foto" untuk memasukkan gambar.</li>
+                <li><b>Zoom:</b> Gunakan scroll mouse (PC) atau cubit layar (HP) untuk memperbesar foto.</li>
+                <li><b>Before/After:</b> Tahan tombol ( \ ) di keyboard (PC) atau tekan &amp; tahan lama foto (HP) untuk membandingkan hasil editan dengan foto asli.</li>
+            </ul>
+            <h4>🎛️ Fitur Editing</h4>
+            <ul>
+                <li><b>LUT Presets:</b> Filter warna instan. Anda bisa menambahkan file LUT eksternal (.cube/.xmp).</li>
+                <li><b>Scroll Presisi:</b> Arahkan kursor ke dalam kotak angka, lalu putar scroll mouse untuk menaik/turunkan nilai +1/-1.</li>
+                <li><b>Reset Cepat:</b> Di HP, ketuk 2x (double-tap) pada bulatan slider untuk mengembalikan nilainya ke 0.</li>
+                <li><b>Pipet HSL:</b> Klik ikon pipet di menu HSL, lalu klik warna di foto untuk menyeleksi warna secara otomatis.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="portfolio-modal" onclick="togglePortfolio(false)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-title">
+            <span id="port-title">💼 Layanan Kami</span>
+            <span class="close-modal" onclick="togglePortfolio(false)">&times;</span>
+        </div>
+        <div class="modal-desc" id="port-desc">Tingkatkan kualitas visualmu bersama kami.</div>
+        <div id="port-categories">
+            </div>
+        <div class="social-wrap" id="modal-social-wrap" style="margin-top: 16px; padding: 0;"></div>
+    </div>
+</div>
+
+<div class="main">
+  <div class="sidebar-left">
+    <div class="panel">
+      <div class="panel-header">
+        <span id="sidebar-port-title"></span>
+        <div class="tagline" id="sidebar-port-tagline"></div>
+      </div>
+      <div id="sidebar-port-categories"></div>
+      <div class="social-wrap" id="sidebar-port-social-wrap"></div>
+    </div>
+  </div>
+
+  <div class="left-column">
+    <div class="preview-area">
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-icon">&#128247;</div>
+        <div class="drop-label">Tarik & lepas file foto di sini</div>
+        <div class="drop-sub">Portrait & Landscape · JPG, PNG, WEBP</div>
+        <button class="btn-choose" onclick="document.getElementById('file-input').click()">Pilih File Foto</button>
+      </div>
+      
+      <canvas id="preview-canvas"></canvas>
+      <canvas id="hidden-canvas"></canvas>
+      
+      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <input type="file" id="lut-file-input" accept=".cube,.xmp" multiple style="display:none">
+      <input type="file" id="lut-folder-input" webkitdirectory directory multiple style="display:none">
+    </div>
+    
+    <div class="action-bar">
+      <button class="btn btn-hold" id="btn-compare" title="Tahan tombol ( \ ) di keyboard atau sentuh lama layar HP untuk membandingkan" disabled>◨ Before/After</button>
+      <button class="btn" id="btn-reset-zoom" disabled onclick="resetZoom()">🔍 Fit Image</button>
+      <button class="btn" id="btn-change-photo" disabled onclick="showDropZone()">Ganti Foto</button>
+      <button class="btn" id="btn-reset" disabled onclick="resetAll()">Reset Edit</button>
+      <button class="btn primary" id="btn-download" disabled onclick="downloadImage()">&#8595; Unduh Hasil</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel('content-lut')">
+        <span>LUT PRESETS</span>
+        <div style="display: flex; gap: 4px;" onclick="event.stopPropagation()">
+           <button class="panel-header-btn" onclick="document.getElementById('lut-folder-input').click()">📁 Folder</button>
+           <button class="panel-header-btn" onclick="document.getElementById('lut-file-input').click()">+ File</button>
+        </div>
+      </div>
+      <div class="lut-hint">✨ Bebas masukin LUT milikmu sendiri!</div>
+      
+      <div class="panel-content" id="content-lut">
+          <div id="lut-folders"></div>
+          
+          <div class="slider-group" style="border-top: 0.5px solid var(--border);">
+            <div class="slider-info">
+              <span class="slider-label">Intensitas Filter (Strength)</span>
+              <span class="slider-reset" onclick="syncIntensity('dblclick', 80)" title="Reset Strength">
+                 <svg viewBox="0 0 512 512"><path d="M48.5 224H40c-13.3 0-24-10.7-24-24V72c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2L98.6 96.6c87.6-86.5 228.7-86.2 315.8 1 87.5 87.5 87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3c-62.2-62.2-162.7-62.5-225.3-1L185 183c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8H48.5z"/></svg>
+              </span>
+            </div>
+            <div class="slider-row">
+              <button class="btn-step" onclick="stepIntensity(-1)">-</button>
+              <div class="slider-safe-box">
+                <input type="range" id="lut-intensity" min="0" max="100" value="80" step="1" 
+                   oninput="syncIntensity('range', this.value)" onchange="syncIntensity('btn', this.value)" ondblclick="syncIntensity('dblclick', 80)" ontouchstart="handleTouchStart(event, () => syncIntensity('dblclick', 80))">
+              </div>
+              <button class="btn-step" onclick="stepIntensity(1)">+</button>
+              <input type="number" class="num-input" id="lut-intensity-num" value="80" min="0" max="100" 
+                 oninput="syncIntensity('num', this.value)" onwheel="handleWheel(event, 'intensity')">
+            </div>
+          </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel('content-light')">
+          <span>Pencahayaan Dasar</span>
+          <span style="font-size:8px;">▼/▲</span>
+      </div>
+      <div class="panel-content" id="content-light">
+          <div id="light-sliders" style="padding-bottom: 8px;"></div>
+          <div style="padding: 0 14px 14px 14px;">
+            <button class="btn" style="width: 100%; justify-content: center;" onclick="resetLighting()">
+                <svg style="width: 12px; height: 12px; fill: currentColor; margin-right: 6px;" viewBox="0 0 512 512"><path d="M48.5 224H40c-13.3 0-24-10.7-24-24V72c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2L98.6 96.6c87.6-86.5 228.7-86.2 315.8 1 87.5 87.5 87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3c-62.2-62.2-162.7-62.5-225.3-1L185 183c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8H48.5z"/></svg>
+                Reset Pencahayaan
+            </button>
+          </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header" onclick="togglePanel('content-hsl')">
+          <span>Color Mix (HSL)</span>
+          <span style="font-size:8px;">▼/▲</span>
+      </div>
+      <div class="panel-content" id="content-hsl">
+          <div class="hsl-header-tools">
+              <button class="btn-picker" id="btn-color-picker" onclick="toggleColorPicker()" title="Pilih warna dari foto">
+                  <svg viewBox="0 0 512 512"><path d="M497.9 142.1l-46.1 46.1c-4.7 4.7-12.3 4.7-17 0l-111-111c-4.7-4.7-4.7-12.3 0-17l46.1-46.1c18.7-18.7 49.1-18.7 67.9 0l60.1 60.1c18.8 18.7 18.8 49.1 0 67.9zM284.2 99.8L21.6 362.4.4 483.9c-2.9 16.4 11.4 30.6 27.8 27.8l121.5-21.3 262.6-262.6c4.7-4.7 4.7-12.3 0-17l-111-111c-4.8-4.7-12.4-4.7-17.1 0zM124.1 339.9c-5.5-5.5-5.5-14.3 0-19.8l154-154c5.5-5.5 14.3-5.5 19.8 0s5.5 14.3 0 19.8l-154 154c-5.5 5.5-14.3 5.5-19.8 0zM88 424h48v36.3l-64.5 11.3-31.1-31.1L51.7 376H88v48z"/></svg>
+              </button>
+              <div class="hsl-dots-wrap" id="hsl-dots-container"></div>
+          </div>
+          <div class="hsl-title" id="hsl-active-title">Warna Terpilih: Merah</div>
+          <div id="hsl-sliders"></div>
+          <div style="padding: 0 14px 14px 14px; text-align: center;">
+             <button class="reset-link" onclick="resetAllHsl()">
+                <svg viewBox="0 0 512 512"><path d="M48.5 224H40c-13.3 0-24-10.7-24-24V72c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2L98.6 96.6c87.6-86.5 228.7-86.2 315.8 1 87.5 87.5 87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3c-62.2-62.2-162.7-62.5-225.3-1L185 183c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8H48.5z"/></svg>
+                Reset Semua Warna
+             </button>
+          </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: auto; border-bottom: none;">
+      <div class="panel-header"><span>Kreator</span></div>
+      <div class="social-wrap" id="sidebar-social-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<footer id="app-footer-display"></footer>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// BAGIAN 1: VARIABEL STATE & KONFIGURASI AWAL
+// ═══════════════════════════════════════════════════════
+
+// Array default untuk menampung data Folder & LUT
+// FOLDERS & LIGHT_CONTROLS dimuat dari config.js
+let FOLDERS = (typeof EDITOR_CONFIG !== 'undefined' && EDITOR_CONFIG.folders)
+  ? EDITOR_CONFIG.folders.map(f => ({
+      ...f,
+      luts: f.luts.map(l => ({
+        ...l,
+        fn: l.fn ? (typeof l.fn === 'function' ? l.fn : eval(l.fn)) : null
+      }))
+    }))
+  : [];
+
+const LIGHT_CONTROLS = (typeof EDITOR_CONFIG !== 'undefined' && EDITOR_CONFIG.pencahayaan)
+  ? EDITOR_CONFIG.pencahayaan
+  : [
+    { id:"exposure",    label:"Exposure",         min:-100, max:100, def:0, step:0.5 },
+    { id:"brightness",  label:"Brightness",        min:-100, max:100, def:0, step:0.5 },
+    { id:"contrast",    label:"Contrast",           min:-100, max:100, def:0, step:0.5 },
+    { id:"highlights",  label:"Highlights",         min:-100, max:100, def:0, step:0.5 },
+    { id:"shadows",     label:"Shadows",            min:-100, max:100, def:0, step:0.5 },
+    { id:"saturation",  label:"Saturation",         min:-100, max:100, def:0, step:0.5 },
+    { id:"temperature", label:"Temp (White Bal)",   min:-100, max:100, def:0, step:0.5 },
+    { id:"sharpness",   label:"Sharpness",          min:0,    max:100, def:0, step:1   }
+  ];
+
+// Definisi Titik Warna Utama pada HSL (Hue, Saturation, Luminance)
+const HSL_COLORS = [
+  { id: 'red', name: 'Merah', hex: '#FF3B30', hue: 0 },
+  { id: 'orange', name: 'Oranye', hex: '#FF9500', hue: 30 },
+  { id: 'yellow', name: 'Kuning', hex: '#FFCC00', hue: 60 },
+  { id: 'green', name: 'Hijau', hex: '#34C759', hue: 120 },
+  { id: 'aqua', name: 'Aqua', hex: '#32ADE6', hue: 180 },
+  { id: 'blue', name: 'Biru', hex: '#007AFF', hue: 240 },
+  { id: 'purple', name: 'Ungu', hex: '#AF52DE', hue: 285 },
+  { id: 'magenta', name: 'Magenta', hex: '#FF2D55', hue: 315 }
+];
+
+// Variabel Menyimpan Data File Foto & EXIF Metadata
+let fullResImg = null; 
+let originalImageData = null; 
+let thumbnailData = null;
+let originalFileName = "Foto"; // Menyimpan nama file asli
+let currentExif = null; // Menyimpan metadata EXIF asli
+let imgOrientation = 1; // Rotasi EXIF
+
+// Variabel Menyimpan State Pengaturan Editan Saat ini
+let currentLUT = "original";
+let currentLUTfn = null;
+let lutIntensity = 0.80;
+let lightValues = {};
+let activeHslColor = 'red';
+let hslValues = {};
+let rafPending = false;
+let lastTapTime = 0;
+let isPickingColor = false; 
+
+// Menginisialisasi array lightValues dan hslValues ke angka default (0)
+LIGHT_CONTROLS.forEach(c => lightValues[c.id] = c.def);
+HSL_COLORS.forEach(c => { hslValues[c.id] = { h: 0, s: 0, l: 0 }; });
+
+const iconResetSVG = `<svg viewBox="0 0 512 512"><path d="M48.5 224H40c-13.3 0-24-10.7-24-24V72c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2L98.6 96.6c87.6-86.5 228.7-86.2 315.8 1 87.5 87.5 87.5 229.3 0 316.8s-229.3 87.5-316.8 0c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0c62.5 62.5 163.8 62.5 226.3 0s62.5-163.8 0-226.3c-62.2-62.2-162.7-62.5-225.3-1L185 183c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8H48.5z"/></svg>`;
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 2: INTERAKSI UI UMUM (KLIK, SCROLL, TAP)
+// ═══════════════════════════════════════════════════════
+
+// Buka/Tutup Menu Panel Kanan & Modal
+function togglePanel(panelId) { const el = document.getElementById(panelId); if(el) el.classList.toggle('hidden'); }
+function togglePortfolio(show) { document.getElementById('portfolio-modal').style.display = show ? 'flex' : 'none'; }
+function toggleModal(show) { document.getElementById('guide-modal').style.display = show ? 'flex' : 'none'; }
+
+// Sensor Pintar Double Tap (Ketukan Ganda di HP)
+function handleTouchStart(e, callback) { 
+  const ct = new Date().getTime(); 
+  if(ct - lastTapTime < 300 && ct - lastTapTime > 0) { callback(); e.preventDefault(); } 
+  lastTapTime = ct; 
+}
+
+// Menangani fungsi Scroll Mouse / Trackpad di dalam Kotak Angka
+function handleWheel(e, type, id) {
+  e.preventDefault(); 
+  const dir = e.deltaY < 0 ? 1 : -1; 
+  if (type === 'intensity') { const sl = document.getElementById("lut-intensity"); if(sl) syncIntensity('btn', parseFloat(sl.value) + dir); } 
+  else if (type === 'light') { const sl = document.getElementById(`sl-${id}`); if(sl) syncSlider(id, 'btn', parseFloat(sl.value) + dir); } 
+  else if (type === 'hsl') { const sl = document.getElementById(`sl-hsl-${id}`); if(sl) syncHslSlider(id, 'btn', parseFloat(sl.value) + dir); }
+}
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 3: INISIALISASI DATA DARI CONFIG.JS
+// ═══════════════════════════════════════════════════════
+
+function initAppConfig() {
+  // Set judul tab browser
+  if(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.judulHalaman) {
+    document.title = APP_CONFIG.judulHalaman;
+  }
+  // Set konten panduan dari config
+  if(typeof GUIDE_CONFIG !== 'undefined') {
+    const gt = document.getElementById('guide-modal-title');
+    const gb = document.getElementById('guide-modal-body');
+    if(gt) gt.innerHTML = (GUIDE_CONFIG.judulPanduan || 'Panduan') + ' <span class="close-modal" onclick="toggleModal(false)">&times;</span>';
+    if(gb) gb.innerHTML = GUIDE_CONFIG.isiPanduan || '';
+  }
+  if(typeof APP_CONFIG === 'undefined') return;
+  document.getElementById('app-title-display').textContent = APP_CONFIG.namaAplikasi;
+  document.getElementById('app-author-display').textContent = APP_CONFIG.namaAuthor;
+  document.getElementById('app-footer-display').innerHTML = APP_CONFIG.teksFooter1;
+
+  // Ikon-ikon orisinal SVG untuk estetika
+  const icons = {
+    ig: `<svg viewBox="0 0 448 512"><path d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>`,
+    tt: `<svg viewBox="0 0 448 512"><path d="M448,209.91a210.06,210.06,0,0,1-122.77-39.25V349.38A162.55,162.55,0,1,1,185,188.31V278.2a74.62,74.62,0,1,0,52.23,71.18V0l88,0a121.18,121.18,0,0,0,1.86,22.17h0A122.18,122.18,0,0,0,381,102.39a121.43,121.43,0,0,0,67,20.14Z"/></svg>`,
+    wa: `<svg viewBox="0 0 448 512"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157.1zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>`,
+    fb: `<svg viewBox="0 0 320 512"><path d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/></svg>`
+  };
+
+  let waNum = APP_CONFIG.sosialMedia.whatsapp;
+  if (waNum && waNum.startsWith('0')) waNum = '62' + waNum.substring(1);
+
+  const platforms = [
+    { key: "instagram", name: "@"+APP_CONFIG.sosialMedia.instagram, url: "https://www.instagram.com/"+APP_CONFIG.sosialMedia.instagram, svg: icons.ig },
+    { key: "tiktok", name: APP_CONFIG.sosialMedia.tiktok, url: "https://www.tiktok.com/@"+APP_CONFIG.sosialMedia.tiktok, svg: icons.tt },
+    { key: "whatsapp", name: APP_CONFIG.sosialMedia.whatsapp, url: "https://wa.me/"+waNum, svg: icons.wa },
+    { key: "facebook", name: APP_CONFIG.sosialMedia.facebook, url: "https://www.facebook.com/"+APP_CONFIG.sosialMedia.facebook, svg: icons.fb }
+  ];
+
+  const sbSocWrap = document.getElementById('sidebar-social-wrap');
+  const mdSocWrap = document.getElementById('modal-social-wrap');
+  const leftSocWrap = document.getElementById('sidebar-port-social-wrap');
+  
+  platforms.forEach(p => {
+    if (APP_CONFIG.sosialMedia[p.key]) {
+      const el = `<a class="social-item" href="${p.url}" target="_blank"><div class="social-icon">${p.svg}</div><span>${p.name}</span></a>`;
+      sbSocWrap.innerHTML += el;
+      mdSocWrap.innerHTML += el;
+      if(leftSocWrap) leftSocWrap.innerHTML += el;
+    }
+  });
+
+  // Setup Render HTML untuk Portofolio Menu (Revisi 9 & Copywriting Jasa)
+  if(typeof PORTFOLIO_CONFIG !== 'undefined') {
+      document.getElementById('btn-show-port').textContent = PORTFOLIO_CONFIG.judulMenu;
+      document.getElementById('port-title').innerHTML = PORTFOLIO_CONFIG.judulMenu;
+      document.getElementById('port-desc').textContent = PORTFOLIO_CONFIG.deskripsiSingkat;
+      
+      const sidebarTitle = document.getElementById('sidebar-port-title');
+      const sidebarTagline = document.getElementById('sidebar-port-tagline');
+      if(sidebarTitle) sidebarTitle.innerHTML = PORTFOLIO_CONFIG.judulSidebar || "JASA & LAYANAN";
+      if(sidebarTagline) sidebarTagline.textContent = PORTFOLIO_CONFIG.taglineSidebar || "";
+      
+      const catContainer = document.getElementById('port-categories');
+      const leftCatContainer = document.getElementById('sidebar-port-categories');
+      PORTFOLIO_CONFIG.kategori.forEach(cat => {
+          let html = `<div class="port-category"><div class="port-cat-title">${cat.nama}</div>`;
+          cat.item.forEach(it => {
+              let badges = '';
+              if (it.ig) badges += `<a href="https://instagram.com/${it.ig}" target="_blank" class="badge-social">${icons.ig} IG: @${it.ig}</a>`;
+              if (it.tt) badges += `<a href="https://tiktok.com/@${it.tt}" target="_blank" class="badge-social">${icons.tt} TT: @${it.tt}</a>`;
+              
+              html += `
+                <div class="port-item">
+                  <h4>${it.judul}</h4>
+                  <p>${it.deskripsi}</p>
+                  ${badges ? `<div class="port-badges">${badges}</div>` : ''}
+                </div>`;
+          });
+          html += `</div>`;
+          if(catContainer) catContainer.innerHTML += html;
+          if(leftCatContainer) leftCatContainer.innerHTML += html;
+      });
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 4: RENDER UI HTML (MEMBUAT ELEMEN PANEL KANAN)
+// ═══════════════════════════════════════════════════════
+
+function buildUI() { initAppConfig(); buildFolders(); buildLightSliders(); buildHslUI(); const defInt = (typeof EDITOR_CONFIG !== 'undefined' && EDITOR_CONFIG.defaultIntensitas != null) ? EDITOR_CONFIG.defaultIntensitas : 80; syncIntensity('init', defInt); lutIntensity = defInt / 100; }
+
+// Render Folder dan Card LUT di menu Preset
+function buildFolders() {
+  const container = document.getElementById("lut-folders"); container.innerHTML = "";
+  FOLDERS.forEach(folder => {
+    const wrap = document.createElement("div"); wrap.className = "lut-folder";
+    const header = document.createElement("div"); header.className = "folder-header";
+    header.innerHTML = `<span class="folder-icon${folder.open ? " open" : ""}">▾</span> 📁 <span class="folder-name">${folder.name}</span><span class="folder-count">${folder.luts.length}</span>`;
+    
+    header.onclick = () => { const g=wrap.querySelector(".folder-luts"), i=wrap.querySelector(".folder-icon"), o=g.classList.contains("open"); g.classList.toggle("open",!o); i.classList.toggle("open",!o); };
+    const grid = document.createElement("div"); grid.className = "folder-luts" + (folder.open ? " open" : "");
+    const tW = thumbnailData ? thumbnailData.width : 150, tH = thumbnailData ? thumbnailData.height : 56;
+    
+    folder.luts.forEach(lut => {
+        const card = document.createElement("div"); card.className = "lut-card" + (lut.id === currentLUT ? " active" : ""); card.dataset.id = lut.id;
+        const cv = document.createElement("canvas"); cv.width = tW; cv.height = tH; drawLUTPreview(cv, lut.fn);
+        const label = document.createElement("div"); label.className = "lut-name"; label.textContent = lut.name;
+        card.appendChild(cv); card.appendChild(label); card.onclick = () => selectLUT(lut.id, lut.fn);
+        grid.appendChild(card);
+    });
+    wrap.appendChild(header); wrap.appendChild(grid); container.appendChild(wrap);
+  });
+}
+
+// Render Slider Pencahayaan (Exposure, Contrast, dll)
+function buildLightSliders() {
+  const wrap = document.getElementById("light-sliders"); wrap.innerHTML = "";
+  LIGHT_CONTROLS.forEach(ctrl => {
+    const group = document.createElement("div"); group.className = "slider-group"; const v = lightValues[ctrl.id];
+    group.innerHTML = `
+      <div class="slider-info">
+        <span class="slider-label">${ctrl.label}</span>
+        <span class="slider-reset" onclick="syncSlider('${ctrl.id}', 'dblclick', ${ctrl.def})" title="Reset ${ctrl.label}">${iconResetSVG}</span>
+      </div>
+      <div class="slider-row">
+        <button class="btn-step" onclick="stepSlider('${ctrl.id}', -1)">-</button>
+        <div class="slider-safe-box">
+          <input type="range" min="${ctrl.min}" max="${ctrl.max}" value="${v}" step="${ctrl.step}" id="sl-${ctrl.id}" 
+             oninput="syncSlider('${ctrl.id}','range',this.value)" onchange="syncSlider('${ctrl.id}','btn',this.value)" ondblclick="syncSlider('${ctrl.id}', 'dblclick', ${ctrl.def})" ontouchstart="handleTouchStart(event, () => syncSlider('${ctrl.id}', 'dblclick', ${ctrl.def}))">
+        </div>
+        <button class="btn-step" onclick="stepSlider('${ctrl.id}', 1)">+</button>
+        <input type="number" class="num-input" id="ni-${ctrl.id}" value="${v}" min="${ctrl.min}" max="${ctrl.max}" step="${ctrl.step}" 
+           oninput="syncSlider('${ctrl.id}','num',this.value)" onblur="clampNumInput('${ctrl.id}')" onwheel="handleWheel(event, 'light', '${ctrl.id}')">
+      </div>`;
+    wrap.appendChild(group);
+    syncSlider(ctrl.id, 'init', v);
+  });
+}
+
+// Render Panel Pemilih Warna (HSL)
+function buildHslUI() {
+  const dotContainer = document.getElementById('hsl-dots-container'), sliderContainer = document.getElementById('hsl-sliders');
+  dotContainer.innerHTML = ''; sliderContainer.innerHTML = '';
+  
+  HSL_COLORS.forEach(c => {
+    const dot = document.createElement('div'); dot.className = 'hsl-dot' + (c.id === activeHslColor ? ' active' : '');
+    dot.style.backgroundColor = c.hex; dot.onclick = () => { activeHslColor = c.id; buildHslUI(); };
+    dotContainer.appendChild(dot);
+  });
+  
+  ['h','s','l'].forEach(key => {
+    const label = key==='h'?'Hue':key==='s'?'Saturation':'Luminance', group = document.createElement('div'); group.className = 'slider-group'; const val = hslValues[activeHslColor][key];
+    group.innerHTML = `
+      <div class="slider-info">
+        <span class="slider-label">${label}</span>
+        <span class="slider-reset" onclick="syncHslSlider('${key}', 'dblclick', 0)">${iconResetSVG}</span>
+      </div>
+      <div class="slider-row">
+        <button class="btn-step" onclick="stepHslSlider('${key}', -1)">-</button>
+        <div class="slider-safe-box">
+          <input type="range" min="-100" max="100" value="${val}" step="1" id="sl-hsl-${key}" 
+             oninput="syncHslSlider('${key}','range',this.value)" onchange="syncHslSlider('${key}','btn',this.value)" ondblclick="syncHslSlider('${key}', 'dblclick', 0)" ontouchstart="handleTouchStart(event, () => syncHslSlider('${key}', 'dblclick', 0))">
+        </div>
+        <button class="btn-step" onclick="stepHslSlider('${key}', 1)">+</button>
+        <input type="number" class="num-input" id="ni-hsl-${key}" value="${val}" min="-100" max="100" step="1" 
+           oninput="syncHslSlider('${key}','num',this.value)" onwheel="handleWheel(event, 'hsl', '${key}')">
+      </div>`;
+    sliderContainer.appendChild(group);
+    syncHslSlider(key, 'init', val);
+  });
+  document.getElementById('hsl-active-title').innerHTML = `Warna Terpilih: <b>${HSL_COLORS.find(c => c.id === activeHslColor).name}</b>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 5: LOGIKA FITUR SPESIFIK (PIPET & SINKRONISASI)
+// ═══════════════════════════════════════════════════════
+
+// Fitur Mode Pipet (Ambil sampel warna dari Canvas)
+function toggleColorPicker(state) {
+    if (state !== undefined) isPickingColor = state; else isPickingColor = !isPickingColor;
+    const btn = document.getElementById('btn-color-picker'), cvs = document.getElementById('preview-canvas');
+    if (isPickingColor) { 
+        btn.classList.add('active'); 
+        cvs.style.cursor = 'crosshair';
+        // Feedback visual instan
+        btn.style.transform = 'scale(0.9)'; 
+        setTimeout(() => btn.style.transform = '', 100);
+    } else { 
+        btn.classList.remove('active'); 
+        cvs.style.cursor = 'grab'; 
+    }
+}
+
+document.getElementById('preview-canvas').addEventListener('mousedown', function(e) {
+    if (!isPickingColor || !originalImageData) return;
+    e.stopPropagation();
+    const rect = this.getBoundingClientRect();
+    // Koordinat relatif terhadap canvas sesungguhnya (memperhitungkan zoom & pan)
+    const centerX = rect.width / 2, centerY = rect.height / 2;
+    const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+    
+    // Reverse math dari setTransform: translate(pointX, pointY) scale(scale)
+    const x = ((mouseX - centerX - pointX) / scale + centerX) * (this.width / rect.width);
+    const y = ((mouseY - centerY - pointY) / scale + centerY) * (this.height / rect.height);
+
+    if(x >= 0 && x < this.width && y >= 0 && y < this.height) {
+        const ctx = document.getElementById("hidden-canvas").getContext("2d");
+        const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+        const [h, s, l] = rgbToHsl(pixel[0], pixel[1], pixel[2]);
+        let minDiff = 360, closestId = 'red';
+        HSL_COLORS.forEach(c => { 
+            let diff = Math.abs(h - c.hue); 
+            if (diff > 180) diff = 360 - diff; 
+            if (diff < minDiff) { minDiff = diff; closestId = c.id; }
+        });
+        activeHslColor = closestId; 
+        buildHslUI(); 
+        toggleColorPicker(false);
+    }
+});
+
+// Sistem Perubahan Nilai Slider dengan Akurasi
+function stepIntensity(direction) { syncIntensity('btn', parseFloat(document.getElementById("lut-intensity").value) + (direction * 1)); }
+function stepSlider(id, direction) { 
+    const ctrl = LIGHT_CONTROLS.find(c=>c.id===id);
+    syncSlider(id, 'btn', parseFloat(document.getElementById(`sl-${id}`).value) + (direction * ctrl.step)); 
+}
+function stepHslSlider(key, direction) { syncHslSlider(key, 'btn', parseFloat(document.getElementById(`sl-hsl-${key}`).value) + (direction * 1)); }
+
+function syncSlider(id, source, rawVal) {
+  const ctrl = LIGHT_CONTROLS.find(c => c.id === id); let val = Math.round(Math.max(ctrl.min, Math.min(ctrl.max, parseFloat(rawVal))) * 10) / 10; if(isNaN(val)) return; lightValues[id] = val;
+  const ni = document.getElementById(`ni-${id}`), sl = document.getElementById(`sl-${id}`);
+  if (source === 'range') { if(ni) ni.value = val; } else if (source === 'num') { if(sl) sl.value = val; } else { if(ni) ni.value = val; if(sl) sl.value = val; }
+  
+  if(sl) {
+    const percent = ((val - ctrl.min) / (ctrl.max - ctrl.min)) * 100;
+    let bg = "";
+    if (ctrl.min < 0 && ctrl.max > 0) {
+      const center = ((-ctrl.min) / (ctrl.max - ctrl.min)) * 100;
+      if (val >= 0) {
+        bg = `linear-gradient(to right, #ffffff ${center}%, #AF52DE ${center}%, #AF52DE ${percent}%, #ffffff ${percent}%)`;
+      } else {
+        bg = `linear-gradient(to right, #ffffff ${percent}%, #AF52DE ${percent}%, #AF52DE ${center}%, #ffffff ${center}%)`;
+      }
+    } else {
+      bg = `linear-gradient(to right, #AF52DE ${percent}%, #ffffff ${percent}%)`;
+    }
+    sl.style.background = bg + " center / 100% 4px no-repeat";
+  }
+  if (source !== 'init') scheduleApply(source === 'range');
+}
+function clampNumInput(id) { const ni = document.getElementById(`ni-${id}`); if (ni) syncSlider(id, 'dblclick', parseFloat(ni.value) || 0); }
+function syncIntensity(source, rawVal) {
+  let val = Math.max(0, Math.min(100, parseFloat(rawVal))); if(isNaN(val)) return; lutIntensity = val / 100;
+  const ni = document.getElementById("lut-intensity-num"), sl = document.getElementById("lut-intensity");
+  if (source === 'range') { if(ni) ni.value = Math.round(val); } else if (source === 'num') { if(sl) sl.value = Math.round(val); } else { if(ni) ni.value = Math.round(val); if(sl) sl.value = Math.round(val); }
+  
+  if(sl) {
+    sl.style.background = `linear-gradient(to right, #AF52DE ${val}%, #ffffff ${val}%) center / 100% 4px no-repeat`;
+  }
+  if (source !== 'init') scheduleApply(source === 'range');
+}
+function syncHslSlider(key, source, rawVal) {
+  let val = Math.max(-100, Math.min(100, parseInt(rawVal))); if(isNaN(val)) return; hslValues[activeHslColor][key] = val;
+  const ni = document.getElementById(`ni-hsl-${key}`), sl = document.getElementById(`sl-hsl-${key}`);
+  if (source === 'range') { if(ni) ni.value = val; } else if (source === 'num') { if(sl) sl.value = val; } else { if(ni) ni.value = val; if(sl) sl.value = val; }
+  
+  if(sl) {
+    const percent = ((val + 100) / 200) * 100;
+    let bg = "";
+    if (val >= 0) {
+      bg = `linear-gradient(to right, #ffffff 50%, #AF52DE 50%, #AF52DE ${percent}%, #ffffff ${percent}%)`;
+    } else {
+      bg = `linear-gradient(to right, #ffffff ${percent}%, #AF52DE ${percent}%, #AF52DE 50%, #ffffff 50%)`;
+    }
+    sl.style.background = bg + " center / 100% 4px no-repeat";
+  }
+  if (source !== 'init') scheduleApply(source === 'range');
+}
+
+function resetAllHsl() { HSL_COLORS.forEach(c => { hslValues[c.id] = {h:0,s:0,l:0}; }); buildHslUI(); scheduleApply(); }
+function resetLighting() { LIGHT_CONTROLS.forEach(c => syncSlider(c.id, 'btn', c.def)); }
+function resetAll() { resetLighting(); resetAllHsl(); selectLUT("original", null); const defInt2 = (typeof EDITOR_CONFIG !== 'undefined' && EDITOR_CONFIG.defaultIntensitas != null) ? EDITOR_CONFIG.defaultIntensitas : 80; syncIntensity('btn', defInt2); resetZoom(); }
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 6: ALGORITMA PENGOLAHAN WARNA (OKLAB, GAUSSIAN HSL, LUT)
+// ═══════════════════════════════════════════════════════
+
+function rgbToHsl(r, g, b) {
+  r/=255; g/=255; b/=255; let max=Math.max(r,g,b), min=Math.min(r,g,b), h, s, l=(max+min)/2;
+  if(max===min) h=s=0; else { let d=max-min; s=l>0.5?d/(2-max-min):d/(max+min); switch(max){ case r: h=(g-b)/d+(g<b?6:0); break; case g: h=(b-r)/d+2; break; case b: h=(r-g)/d+4; break; } h/=6; }
+  return [h*360, s, l];
+}
+
+/** 
+ * PROFESSIONAL COLOR SCIENCE: Oklab Transformation
+ * Oklab is a perceptually uniform color space. 
+ * This prevents color "shifts" during intensity / lightness adjustments.
+ */
+function linearize(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function delinearize(c) { return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; }
+
+function rgbToOklab(r, g, b) {
+    const lr = linearize(r / 255), lg = linearize(g / 255), lb = linearize(b / 255);
+    const l = Math.pow(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb, 1/3);
+    const m = Math.pow(0.2119034982 * lr + 0.6740317641 * lg + 0.1140647376 * lb, 1/3);
+    const s = Math.pow(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb, 1/3);
+    return [
+        0.2104542553 * l + 0.7936177850 * m - 0.0040720403 * s,
+        1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    ];
+}
+
+function oklabToRgb(L, a, b) {
+    const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+    const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+    const s = Math.pow(L - 0.0894841775 * a - 1.2914855480 * b, 3);
+    const lr = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    const lb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+    return [
+        Math.max(0, Math.min(255, delinearize(lr) * 255)),
+        Math.max(0, Math.min(255, delinearize(lg) * 255)),
+        Math.max(0, Math.min(255, delinearize(lb) * 255))
+    ];
+}
+
+function oklabToLch(L, a, b) {
+    const C = Math.sqrt(a * a + b * b);
+    let h = (Math.atan2(b, a) * 180) / Math.PI;
+    if (h < 0) h += 360;
+    return [L, C, h];
+}
+
+function lchToOklab(L, C, h) {
+    const a = C * Math.cos((h * Math.PI) / 180);
+    const b = C * Math.sin((h * Math.PI) / 180);
+    return [L, a, b];
+}
+
+// Fungsi Utama Proses Piksel (HIGH PRECISION PIPELINE)
+function processPixels(pixels) {
+  const { exposure, brightness, contrast, highlights, shadows, saturation, temperature } = lightValues;
+  
+  // Pre-calculate constants for efficiency
+  const expMul = Math.pow(2, exposure / 50);
+  const brAdj = (brightness / 100) * 0.2; // Oklab L adjustment
+  const contrastFactor = (contrast + 100) / 100;
+  const satMul = 1 + (saturation / 100);
+  const tempAdj = (temperature / 100) * 0.05;
+  
+  // Use Float32 for internal processing to prevent rounding errors and banding
+  const data = new Float32Array(pixels.length);
+  for(let i=0; i<pixels.length; i++) data[i] = pixels[i];
+
+  const sigma = 25; // Optimized Gaussian Bandwidth for seamless HSL transitions
+  let activeHsl = [];
+  for(let j=0; j<HSL_COLORS.length; j++) {
+      const v = hslValues[HSL_COLORS[j].id];
+      if(v.h !== 0 || v.s !== 0 || v.l !== 0) activeHsl.push({...HSL_COLORS[j], ...v});
+  }
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i], g = data[i+1], b = data[i+2];
+
+    // 1. LUT Application (Linear-aware fallback)
+    if (currentLUTfn) { 
+        const [lr, lg, lb] = currentLUTfn(r, g, b); 
+        r += (lr - r) * lutIntensity; 
+        g += (lg - g) * lutIntensity; 
+        b += (lb - b) * lutIntensity; 
+    }
+
+    // 2. Perceptual Processing in Oklab
+    let [L, a, b_ok] = rgbToOklab(r, g, b);
+    let [L_lch, C_lch, h_lch] = oklabToLch(L, a, b_ok);
+
+    // 3. Gaussian Falloff HSL Processing
+    if (activeHsl.length > 0) {
+        let hShift = 0, sShift = 0, lShift = 0;
+        for(let j=0; j < activeHsl.length; j++) {
+            const node = activeHsl[j];
+            let dist = Math.abs(h_lch - node.hue);
+            if (dist > 180) dist = 360 - dist;
+            
+            // Professional Gaussian weighting
+            const weight = Math.exp(-0.5 * Math.pow(dist / sigma, 2));
+            if (weight > 0.01) {
+                hShift += (node.h * 0.6) * weight; // Scaled Hue
+                sShift += (node.s / 100) * weight; // Saturation weight
+                lShift += (node.l / 100) * weight; // Lightness weight
+            }
+        }
+        h_lch += hShift;
+        C_lch *= (1 + sShift);
+        L_lch += (lShift * 0.15); // Perception-scaled lightness
+    }
+
+    // 4. Basic Lighting Adjustments (Oklab Optimized)
+    L_lch = Math.pow(L_lch, 1 / expMul); // Exposure
+    L_lch += brAdj; // Brightness
+    L_lch = 0.5 + (L_lch - 0.5) * contrastFactor; // Contrast
+    
+    // Highlight & Shadow Recovery
+    if (highlights !== 0 && L_lch > 0.5) {
+        L_lch += (highlights / 100) * Math.pow((L_lch - 0.5) * 2, 2) * 0.2;
+    }
+    if (shadows !== 0 && L_lch < 0.5) {
+        L_lch += (shadows / 100) * Math.pow((0.5 - L_lch) * 2, 2) * 0.2;
+    }
+
+    // Global Saturation & White Balance
+    C_lch *= satMul;
+    [L, a, b_ok] = lchToOklab(L_lch, C_lch, h_lch);
+    b_ok -= tempAdj; // Temperature shift in Oklab axis
+    
+    // Convert back with precision
+    [r, g, b] = oklabToRgb(L, a, b_ok);
+    
+    pixels[i] = r; pixels[i+1] = g; pixels[i+2] = b;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 7: CORE ENGINE & PEMROSESAN RENDER
+// ═══════════════════════════════════════════════════════
+
+function drawLUTPreview(canvas, fn) {
+  const ctx = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
+  if (thumbnailData) {
+    const data = new Uint8ClampedArray(thumbnailData.data);
+    for (let i=0; i<data.length; i+=4) {
+      if (fn) { let [nr,ng,nb]=fn(data[i],data[i+1],data[i+2]); data[i]=Math.max(0,Math.min(255,nr)); data[i+1]=Math.max(0,Math.min(255,ng)); data[i+2]=Math.max(0,Math.min(255,nb)); }
+    }
+    ctx.putImageData(new ImageData(data, W, H), 0, 0);
+  } else {
+    for (let i=0; i<W; i++) {
+      let t=i/(W-1), r=Math.round(t*255), g=Math.round(t*255), b=Math.round(t*255);
+      if (fn) { let [nr,ng,nb]=fn(r,g,b); r=Math.max(0,Math.min(255,Math.round(nr))); g=Math.max(0,Math.min(255,Math.round(ng))); b=Math.max(0,Math.min(255,Math.round(nb))); }
+      ctx.fillStyle=`rgb(${r},${g},${b})`; ctx.fillRect(i,0,1,H);
+    }
+  }
+}
+
+function updateAllLUTPreviews() {
+  const tW = thumbnailData ? thumbnailData.width : 150;
+  const tH = thumbnailData ? thumbnailData.height : 56; // 56 is approx 150 * (44/120)
+
+  document.querySelectorAll('.lut-card canvas').forEach(canvas => {
+    canvas.width = tW; canvas.height = tH;
+    const id = canvas.parentElement.dataset.id; let fn = null;
+    if (id !== 'original') { for (let f of FOLDERS) { let found = f.luts.find(l => l.id === id); if (found) { fn = found.fn; break; } } }
+    drawLUTPreview(canvas, fn);
+  });
+}
+
+function selectLUT(id, fn) {
+  currentLUT = id; currentLUTfn = fn || null;
+  document.querySelectorAll(".lut-card").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(`.lut-card[data-id="${id}"]`).forEach(c => c.classList.add("active"));
+  scheduleApply();
+}
+
+function scheduleApply(isDragging = false) {
+  if (rafPending) return; rafPending = true;
+  requestAnimationFrame(() => { 
+    rafPending = false; 
+    applyAll(isDragging); 
+  });
+}
+
+function applyAll(isDragging = false) {
+  if (!originalImageData) return;
+  const hc = document.getElementById("hidden-canvas"), ctx = hc.getContext("2d");
+  
+  if (isDragging && thumbnailData) {
+    const tData = new Uint8ClampedArray(thumbnailData.data);
+    processPixels(tData);
+    const cvs = document.createElement('canvas'); 
+    cvs.width = thumbnailData.width; cvs.height = thumbnailData.height;
+    cvs.getContext('2d').putImageData(new ImageData(tData, cvs.width, cvs.height), 0, 0);
+    document.getElementById("preview-canvas").getContext("2d").drawImage(cvs, 0, 0, document.getElementById("preview-canvas").width, document.getElementById("preview-canvas").height);
+    return;
+  }
+
+  // HD Render
+  const data = new Uint8ClampedArray(originalImageData.data);
+  processPixels(data);
+  ctx.putImageData(new ImageData(data, hc.width, hc.height), 0, 0);
+  document.getElementById("preview-canvas").getContext("2d").drawImage(hc, 0, 0, hc.width, hc.height);
+}
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 8: FITUR LANJUTAN (BANDINGKAN, DOWNLOAD, ZOOM)
+// ═══════════════════════════════════════════════════════
+
+const btnCompare = document.getElementById('btn-compare');
+let isComparing = false;
+function showOriginal() { if(!originalImageData) return; const hc=document.getElementById("hidden-canvas"), pc=document.getElementById("preview-canvas"); hc.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(originalImageData.data), hc.width, hc.height), 0, 0); pc.getContext("2d").drawImage(hc, 0, 0, pc.width, pc.height); }
+function showEdited() { scheduleApply(); }
+
+// Event Mouse / Click
+btnCompare.addEventListener('mousedown', () => { isComparing=true; showOriginal(); }); btnCompare.addEventListener('mouseup', () => { isComparing=false; showEdited(); }); btnCompare.addEventListener('mouseleave', () => { if(isComparing){ isComparing=false; showEdited(); }}); 
+// Event Touch & Long Press HP (Revisi 5)
+btnCompare.addEventListener('touchstart', (e) => { e.preventDefault(); isComparing=true; showOriginal(); }); btnCompare.addEventListener('touchend', (e) => { e.preventDefault(); isComparing=false; showEdited(); });
+// Keyboard Backslash
+document.addEventListener('keydown', (e) => { if (e.key==='\\' && !isComparing && originalImageData) { isComparing=true; btnCompare.classList.add('active-hold'); showOriginal(); }}); document.addEventListener('keyup', (e) => { if (e.key==='\\' && isComparing) { isComparing=false; btnCompare.classList.remove('active-hold'); showEdited(); }});
+
+// Helper Menggambar dengan Rotasi Asli (EXIF Fix - Revisi 4)
+function drawRotatedImage(canvas, img, orientation) {
+    const ctx = canvas.getContext("2d");
+    let width = img.naturalWidth, height = img.naturalHeight;
+    
+    // Tukar panjang & lebar jika foto aslinya rotasi samping (EXIF 5-8)
+    if ([5, 6, 7, 8].includes(orientation)) {
+        canvas.width = height; canvas.height = width;
+    } else {
+        canvas.width = width; canvas.height = height;
+    }
+
+    // Set Transformasi Canvas berdasarkan Data EXIF
+    switch (orientation) {
+        case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+        case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+        case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+        case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+        case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+        case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+        case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+        default: break;
+    }
+    ctx.drawImage(img, 0, 0);
+}
+
+// FITUR DOWNLOAD (Revisi 1, 2, 4, 5)
+function downloadImage() {
+  if (!fullResImg) return;
+  const btn = document.getElementById("btn-download"); btn.innerHTML = "⏳ Memproses..."; btn.disabled = true;
+  
+  setTimeout(() => {
+    try {
+      const expCanvas = document.createElement("canvas"); 
+      
+      // Menggambar ke Canvas sementara dengan mematuhi EXIF Rotasi
+      drawRotatedImage(expCanvas, fullResImg, imgOrientation);
+      
+      const ctx = expCanvas.getContext("2d");
+      const imgData = ctx.getImageData(0, 0, expCanvas.width, expCanvas.height); 
+      processPixels(imgData.data); 
+      ctx.putImageData(imgData, 0, 0);
+      
+      // Ambil Base64 JPEG Maksimal Resolusi (Kualitas 100%)
+      let jpegData = expCanvas.toDataURL("image/jpeg", 1.0); 
+      
+      // Inject kembali Data EXIF secara utuh (Lokasi GPS, Kamera, dll) jika tersedia
+      if (currentExif && typeof piexif !== 'undefined') {
+         try {
+             let exifStr = piexif.dump(currentExif);
+             jpegData = piexif.insert(exifStr, jpegData);
+         } catch(ex) { console.log("Gagal memasukkan Exif", ex); }
+      }
+      
+      // Eksekusi Download (Format Nama Baru Sesuai IG)
+      const link = document.createElement("a"); 
+      let igName = APP_CONFIG && APP_CONFIG.sosialMedia.instagram ? APP_CONFIG.sosialMedia.instagram : "Editor";
+      const fmtDl = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.formatNamaDownload)
+        ? APP_CONFIG.formatNamaDownload.replace('{namaFile}', originalFileName).replace('{ig}', igName)
+        : originalFileName + " - preset by @" + igName + ".jpg";
+      link.download = fmtDl; 
+      link.href = jpegData; 
+      link.click();
+      
+      // Notifikasi Sosial Media Setelah Download
+      if(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sosialMedia.instagram) {
+          const pesanDl = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.pesanDownload)
+          ? APP_CONFIG.pesanDownload.replace('{ig}', APP_CONFIG.sosialMedia.instagram)
+          : 'Foto berhasil diunduh!';
+        alert(pesanDl);
+      }
+    } catch (err) { alert("Gagal memproses gambar penuh. Pastikan memori perangkat kamu cukup."); } 
+    finally { btn.innerHTML = "&#8595; Unduh Hasil"; btn.disabled = false; }
+  }, 100);
+}
+
+const canvasObj = document.getElementById("preview-canvas");
+function setTransform() { canvasObj.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`; }
+
+function resetZoom() { 
+    scale = 1; pointX = 0; pointY = 0; 
+    canvasObj.style.width = "100%"; canvasObj.style.height = "100%"; canvasObj.style.objectFit = "contain";
+    setTransform(); 
+}
+
+// Logika Mouse Pan/Drag
+canvasObj.onmousedown = function (e) { e.preventDefault(); start = { x: e.clientX - pointX, y: e.clientY - pointY }; panning = true; }; canvasObj.onmouseup = function () { panning = false; }; canvasObj.onmouseleave = function () { panning = false; }; canvasObj.onmousemove = function (e) { if (!panning) return; e.preventDefault(); pointX = (e.clientX - start.x); pointY = (e.clientY - start.y); setTransform(); };
+// Logika Mouse Wheel Zoom
+canvasObj.onwheel = function (e) { e.preventDefault(); const rect = canvasObj.getBoundingClientRect(); let mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top; let xs = mouseX / scale, ys = mouseY / scale, delta = (e.wheelDelta ? e.wheelDelta : -e.deltaY); let newScale = scale * (delta > 0 ? 1.1 : 1/1.1); newScale = Math.max(1, Math.min(newScale, 10)); pointX += mouseX - xs * newScale; pointY += mouseY - ys * newScale; scale = newScale; if (scale === 1) { pointX = 0; pointY = 0; } setTransform(); };
+
+// Sistem Deteksi Sentuhan Di HP (Revisi 12: Zoom Anti Loncat & Tahan)
+let holdTimer;
+canvasObj.addEventListener('touchstart', (e) => { 
+    if (e.touches.length === 2) { 
+        pinchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); 
+        startScale = scale; 
+        
+        // Simpan titik awal pan agar tidak lompat
+        const rect = canvasObj.getBoundingClientRect();
+        startPinchCenter = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+        startPoint = { x: pointX, y: pointY };
+        
+        clearTimeout(holdTimer);
+    } else if (e.touches.length === 1) { 
+        start = { x: e.touches[0].clientX - pointX, y: e.touches[0].clientY - pointY }; panning = true; 
+        // Menahan 400ms di HP untuk fungsi Tahan Layar Before/After
+        holdTimer = setTimeout(() => { if(!isPickingColor && scale === 1) { isComparing = true; showOriginal(); } }, 400);
+    }
+}, { passive: false });
+
+canvasObj.addEventListener('touchmove', (e) => { 
+    clearTimeout(holdTimer); // Batal tahan layar jika jari bergerak
+    if (e.touches.length === 2) { 
+        e.preventDefault(); 
+        let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); 
+        let newScale = startScale * (dist / pinchStartDist); newScale = Math.max(1, Math.min(newScale, 10)); 
+        
+        let currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        let currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = canvasObj.getBoundingClientRect(); 
+        
+        let mouseX = currentCenterX - rect.left, mouseY = currentCenterY - rect.top; 
+        let xs = (startPinchCenter.x - rect.left - startPoint.x) / startScale; 
+        let ys = (startPinchCenter.y - rect.top - startPoint.y) / startScale; 
+        
+        pointX = mouseX - xs * newScale; pointY = mouseY - ys * newScale; scale = newScale; 
+        if (scale === 1) { pointX = 0; pointY = 0; } 
+        setTransform(); 
+    } else if (e.touches.length === 1 && panning) { 
+        e.preventDefault(); 
+        pointX = (e.touches[0].clientX - start.x); pointY = (e.touches[0].clientY - start.y); 
+        setTransform(); 
+    }
+}, { passive: false });
+
+canvasObj.addEventListener('touchend', (e) => { clearTimeout(holdTimer); if(isComparing) { isComparing = false; showEdited(); } if (e.touches.length < 2) startScale = scale; if (e.touches.length === 0) panning = false; });
+
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 9: FILE HANDLING (LOAD GAMBAR, EKSTRAKSI EXIF, LOAD LUT)
+// ═══════════════════════════════════════════════════════
+
+function showDropZone() { document.getElementById("preview-canvas").style.display = "none"; document.getElementById("drop-zone").style.display = "flex"; ["btn-reset","btn-download","btn-change-photo","btn-compare","btn-reset-zoom"].forEach(id => document.getElementById(id).disabled = true); fullResImg = null; originalImageData = null; thumbnailData = null; currentExif = null; imgOrientation = 1; resetZoom(); }
+
+function loadImage(file) { 
+  // Menyimpan nama file asli (tanpa .jpg) untuk keperluan Download Auto-Rename
+  originalFileName = file.name.split('.').slice(0, -1).join('.') || "Foto";
+  
+  const reader = new FileReader(); 
+  reader.onload = e => { 
+      imgOrientation = 1;
+      // Ekstrak Data EXIF menggunakan library piexif saat foto baru diunggah
+      if(typeof piexif !== 'undefined' && e.target.result.startsWith("data:image/jpeg")) {
+          try { 
+             currentExif = piexif.load(e.target.result); 
+             if(currentExif && currentExif["0th"] && currentExif["0th"][piexif.ImageIFD.Orientation]) {
+                 imgOrientation = currentExif["0th"][piexif.ImageIFD.Orientation];
+             }
+          } catch(ex) { currentExif = null; }
+      }
+      
+      const img = new Image(); 
+      img.onload = () => processLoadedImage(img); 
+      img.src = e.target.result; 
+  }; 
+  reader.readAsDataURL(file); 
+}
+
+function processLoadedImage(img) {
+  fullResImg = img;
+  const hc = document.getElementById("hidden-canvas"), previewMax = 1024;
+  
+  // Mencari lebar/tinggi asli yang disesuaikan rotasi
+  let trueWidth = img.naturalWidth, trueHeight = img.naturalHeight;
+  if ([5, 6, 7, 8].includes(imgOrientation)) { trueWidth = img.naturalHeight; trueHeight = img.naturalWidth; }
+  
+  const imgAspect = trueWidth / trueHeight;
+  let pW, pH; if (trueWidth > previewMax || trueHeight > previewMax) { if (imgAspect >= 1) { pW = previewMax; pH = Math.round(previewMax / imgAspect); } else { pH = previewMax; pW = Math.round(previewMax * imgAspect); } } else { pW = trueWidth; pH = trueHeight; }
+  
+  // Menggambar Preview Canvas dengan Rotasi Asli
+  drawRotatedImage(hc, img, imgOrientation);
+  // Me-resize canvas ke ukuran ringan (1K) agar aplikasi HP tidak lag
+  const tempCvs = document.createElement('canvas'); tempCvs.width = pW; tempCvs.height = pH;
+  tempCvs.getContext("2d").drawImage(hc, 0, 0, hc.width, hc.height, 0, 0, pW, pH);
+  
+  hc.width = pW; hc.height = pH; hc.getContext("2d").drawImage(tempCvs, 0, 0);
+  originalImageData = hc.getContext("2d").getImageData(0, 0, pW, pH);
+  
+  const thumbWidth = 150; // Lebar standar thumbnail
+  const thumbHeight = Math.round(thumbWidth / imgAspect);
+  const tCanvas = document.createElement("canvas"); tCanvas.width = thumbWidth; tCanvas.height = thumbHeight; 
+  const tCtx = tCanvas.getContext("2d");
+  
+  tCtx.drawImage(hc, 0, 0, pW, pH, 0, 0, thumbWidth, thumbHeight);
+  thumbnailData = tCtx.getImageData(0, 0, thumbWidth, thumbHeight);
+  updateAllLUTPreviews(); 
+
+  document.getElementById("drop-zone").style.display = "none";
+  const pc = document.getElementById("preview-canvas");
+  pc.width = pW; pc.height = pH; pc.style.display = "block";
+  
+  ["btn-reset","btn-download","btn-change-photo","btn-compare","btn-reset-zoom"].forEach(id => document.getElementById(id).disabled = false);
+  resetZoom(); scheduleApply();
+}
+
+function loadLUTFiles(files, isFolder = false) {
+  Array.from(files).forEach(file => {
+    const ext = file.name.split('.').pop().toLowerCase(); if(ext !== 'cube' && ext !== 'xmp') return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      let fn = ext === 'cube' ? parseCUBE(e.target.result) : parseXMP(e.target.result); if (!fn) return;
+      let folderName = "LUT Kustom"; if (isFolder && file.webkitRelativePath) { const parts = file.webkitRelativePath.split('/'); if (parts.length >= 2) folderName = parts[parts.length - 2]; }
+      const lutName = file.name.replace(/\.(cube|xmp)$/i, ''), id = "ext_" + lutName.replace(/\W/g, '_') + "_" + Math.random().toString(36).substr(2,4);
+      let targetFolder = FOLDERS.find(f => f.name === folderName); if (!targetFolder) { targetFolder = { id: "f_" + Math.random().toString(36).substr(2,5), name: folderName, open: false, luts: [] }; FOLDERS.push(targetFolder); }
+      const exists = targetFolder.luts.find(l => l.name === lutName); if (!exists) targetFolder.luts.push({ name: lutName, id, fn }); else exists.fn = fn;
+      buildFolders(); if (originalImageData) updateAllLUTPreviews();
+    };
+    reader.readAsText(file);
+  });
+}
+
+function parseCUBE(text) { const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')); let size = 0, data1D = [], data3D = [], is3D = false; for (const line of lines) { if (line.startsWith('LUT_1D_SIZE')) { size = parseInt(line.split(/\s+/)[1]); is3D = false; } else if (line.startsWith('LUT_3D_SIZE')) { size = parseInt(line.split(/\s+/)[1]); is3D = true; } else if (/^[\d.\-e]+\s+[\d.\-e]+\s+[\d.\-e]+$/.test(line)) { const [r,g,b] = line.split(/\s+/).map(Number); if (is3D) data3D.push(r,g,b); else data1D.push(r,g,b); } } if (is3D && data3D.length > 0 && size > 0) { return (r,g,b) => { const ri = r/255*(size-1), gi = g/255*(size-1), bi = b/255*(size-1); const r0=Math.floor(ri), g0=Math.floor(gi), b0=Math.floor(bi), r1=Math.min(r0+1,size-1), g1=Math.min(g0+1,size-1), b1=Math.min(b0+1,size-1); const rf=ri-r0, gf=gi-g0, bf=bi-b0; function s(ri,gi,bi){ const idx=(bi*size*size+gi*size+ri)*3; return[data3D[idx],data3D[idx+1],data3D[idx+2]]; } const c=[0,0,0], corners=[s(r0,g0,b0),s(r1,g0,b0),s(r0,g1,b0),s(r1,g1,b0),s(r0,g0,b1),s(r1,g0,b1),s(r0,g1,b1),s(r1,g1,b1)]; for(let i=0;i<3;i++) c[i]=corners[0][i]*(1-rf)*(1-gf)*(1-bf)+corners[1][i]*rf*(1-gf)*(1-bf)+corners[2][i]*(1-rf)*gf*(1-bf)+corners[3][i]*rf*gf*(1-bf)+corners[4][i]*(1-rf)*(1-gf)*bf+corners[5][i]*rf*(1-gf)*bf+corners[6][i]*(1-rf)*gf*bf+corners[7][i]*rf*gf*bf; return [c[0]*255, c[1]*255, c[2]*255]; }; } if (!is3D && data1D.length > 0 && size > 0) { return (r,g,b) => { function lup(v,ch){ const t=v/255*(size-1), i=Math.floor(t), f=t-i, a=data1D[Math.min(i,size-1)*3+ch], b2=data1D[Math.min(i+1,size-1)*3+ch]; return(a+(b2-a)*f)*255; } return [lup(r,0), lup(g,1), lup(b,2)]; }; } return null; }
+function parseXMP(text) { const parser = new DOMParser(), xmlDoc = parser.parseFromString(text, "text/xml"); function getAttr(name) { const element = xmlDoc.getElementsByTagName(`crs:${name}`)[0] || xmlDoc.getElementsByTagName(name)[0]; if (element) return element.textContent; const desc = xmlDoc.getElementsByTagName("rdf:Description")[0]; if (desc) return desc.getAttribute(`crs:${name}`); return null; } const expV = getAttr('Exposure2012') || getAttr('Exposure') || "0", contV = getAttr('Contrast2012') || getAttr('Contrast') || "0", satV = getAttr('Saturation') || "0", hiV = getAttr('Highlights2012') || getAttr('Highlights') || "0", shadV = getAttr('Shadows2012') || getAttr('Shadows') || "0"; const exp = parseFloat(expV), cont = parseFloat(contV), sat = parseFloat(satV), hi = parseFloat(hiV), shad = parseFloat(shadV), expMul = Math.pow(2, exp), satMul = 1 + sat / 100, contF = cont !== 0 ? (259 * (cont + 255)) / (255 * (259 - cont)) : 1; if (expV !== "0" || contV !== "0" || satV !== "0") { return (r, g, b) => { r *= expMul; g *= expMul; b *= expMul; if (cont !== 0) { r = contF * (r - 128) + 128; g = contF * (g - 128) + 128; b = contF * (b - 128) + 128; } const lum = r * .2126 + g * .7152 + b * .0722; if (hi !== 0 && lum > 128) { const adj = hi * ((lum - 128) / 127) * .8; r += adj; g += adj; b += adj; } if (shad !== 0 && lum < 128) { const adj = shad * ((128 - lum) / 128) * .8; r += adj; g += adj; b += adj; } const gray = r * .2126 + g * .7152 + b * .0722; r = gray + (r - gray) * satMul; g = gray + (g - gray) * satMul; b = gray + (b - gray) * satMul; return [r, g, b]; }; } if (text.includes('xmpmeta') || text.includes('rdf:RDF')) return (r,g,b) => [r,g,b]; return null; }
+
+const dz = document.getElementById("drop-zone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.style.background="var(--bg3)"; }); dz.addEventListener("dragleave", () => { dz.style.background=""; });
+dz.addEventListener("drop", e => { e.preventDefault(); dz.style.background=""; const imgFile = Array.from(e.dataTransfer.files).find(f => f.type.startsWith("image/")), lutFiles = Array.from(e.dataTransfer.files).filter(f => /\.(cube|xmp)$/i.test(f.name)); if (imgFile) loadImage(imgFile); if (lutFiles.length) loadLUTFiles(lutFiles, false); });
+
+document.getElementById("file-input").addEventListener("change", e => { if (e.target.files[0]) loadImage(e.target.files[0]); });
+document.getElementById("lut-file-input").addEventListener("change", e => { if (e.target.files.length) loadLUTFiles(e.target.files, false); e.target.value = ""; });
+document.getElementById("lut-folder-input").addEventListener("change", e => { if (e.target.files.length) loadLUTFiles(e.target.files, true); e.target.value = ""; });
+
+buildUI();
+
+// ═══════════════════════════════════════════════════════
+// BAGIAN 10: AUTO-LOAD FOLDER DARI REPOSITORI
+// ═══════════════════════════════════════════════════════
+async function loadAutoPresets() {
+  try {
+    const response = await fetch('presets.json');
+    if (!response.ok) throw new Error("File presets.json tidak ditemukan");
+    const data = await response.json();
+    for (const cat of data.categories) {
+      for (const fileName of cat.files) {
+        try {
+          const xmpRes = await fetch(cat.path + fileName), xmpText = await xmpRes.text(), fn = parseXMP(xmpText);
+          if (fn) {
+            let targetFolder = FOLDERS.find(f => f.name === cat.name);
+            if (!targetFolder) { targetFolder = { id: "f_git_" + Math.random().toString(36).substr(2,5), name: cat.name, open: false, luts: [] }; FOLDERS.push(targetFolder); }
+            const lutName = fileName.replace(/\.(xmp|cube)$/i, '');
+            if (!targetFolder.luts.find(l => l.name === lutName)) targetFolder.luts.push({ name: lutName, id: "git_" + Math.random().toString(36).substr(2,4), fn: fn });
+          }
+        } catch (e) { console.error("Gagal memuat file:", cat.path + fileName); }
+      }
+    }
+    buildFolders(); if (originalImageData) updateAllLUTPreviews();
+  } catch (err) { console.warn("Info: Fitur auto-preset belum aktif (presets.json tidak ada)."); }
+}
+
+loadAutoPresets();
+</script>
+</body>
+</html>
